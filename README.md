@@ -11,6 +11,46 @@ This project is a powerful Remix-based API service that transforms Shopify produ
 - 💾 Intelligent caching mechanism
 - 🔒 Optional API key authentication
 - 📊 Comprehensive product information extraction
+- 🖼️ Automatic resolution of file reference metafields to actual URLs
+- 📈 Smart handling of large product catalogs with Shopify's query cost limits
+
+## File Reference Resolution
+
+The system automatically resolves Shopify file references in metafields to their actual URLs using a multi-stage approach:
+
+1. **Initial Resolution**: First attempts to match file references with media data fetched in the main query
+2. **Format Matching**: Tries multiple ID formats (full ID, without prefix, numeric only) to increase match chances
+3. **Direct Fetch Fallback**: For any unresolved references, performs individual GraphQL queries to fetch media directly by ID
+4. **Result Storage**: 
+   - `value`: Contains the resolved URL(s)
+   - `originalValue`: Preserves the original reference ID(s)
+   - `processed`: Flag indicating the field was processed
+
+This ensures that metafields containing references to images or other media (like those with type `file_reference` or `list.file_reference`) return actual URLs in the API response, making them immediately usable without needing client-side resolution.
+
+### Example
+
+Original metafield:
+```json
+{
+  "namespace": "global",
+  "key": "images",
+  "value": "[\"gid://shopify/MediaImage/33140630487265\"]",
+  "type": "list.file_reference"
+}
+```
+
+Transformed metafield:
+```json
+{
+  "namespace": "global",
+  "key": "images",
+  "value": "[\"https://cdn.shopify.com/s/files/1/0123/4567/8901/products/example-image.jpg\"]",
+  "type": "list.file_reference",
+  "originalValue": "[\"gid://shopify/MediaImage/33140630487265\"]",
+  "processed": true
+}
+```
 
 ## Prerequisites
 
@@ -84,10 +124,19 @@ interface ShopifyProduct {
   vendor: string;
   url: string;
   options: ProductOption[];
-  metafields: Metafield[];
+  metafields: ShopifyMetafield[];
   variants: ProductVariant[];
   images: ProductImage[];
   translations: any[]; // Currently empty
+}
+
+interface ShopifyMetafield {
+  namespace: string;
+  key: string;
+  value: string;         // For file_reference types, this will contain the URL instead of the ID
+  type: string;
+  originalValue?: string; // Original ID value is preserved here
+  processed?: boolean;    // Indicates if this metafield was processed
 }
 
 interface ProductVariant {
@@ -140,3 +189,19 @@ Distributed under the MIT License. See `LICENSE` for more information.
 Your Name - your.email@example.com
 
 Project Link: [https://github.com/your-username/shopify-to-llm](https://github.com/your-username/shopify-to-llm)
+
+## Performance Notes
+
+### Handling Large Product Catalogs
+
+This project includes optimizations for Shopify stores with large product catalogs:
+
+1. **Optimized GraphQL Queries**: Queries are designed to stay under Shopify's 1000-point cost limit.
+2. **Batched Fetching**: Products are retrieved in smaller batches to avoid hitting GraphQL limits.
+3. **Fallback Mechanism**: If a query exceeds cost limits, the system automatically falls back to a two-phase approach:
+   - First fetches basic product data
+   - Then enriches products with detailed metafields and media information
+
+For very large stores (1000+ products), we recommend:
+- Using the caching mechanism (`?refresh=true` only when needed)
+- Setting up a scheduled job to refresh the cache during off-peak hours

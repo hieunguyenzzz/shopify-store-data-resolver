@@ -7,6 +7,9 @@ export interface ShopifyMetafield {
   key: string;
   value: string;
   type: string;
+  // Optional fields for processed file references
+  originalValue?: string;
+  processed?: boolean;
 }
 
 export interface ShopifyVariant {

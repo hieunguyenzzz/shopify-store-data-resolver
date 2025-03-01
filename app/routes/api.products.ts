@@ -3,7 +3,8 @@ import type { LoaderFunctionArgs } from '@remix-run/node';
 import { 
   fetchAllProducts, 
   fetchInventoryLevels, 
-  transformDataForLLM 
+  transformDataForLLM,
+  fetchAllMedia
 } from '~/services/shopify.service';
 import { cache } from '~/utils/cache';
 import type { ProductsResponse, ErrorResponse } from '~/types/shopify.types';
@@ -38,14 +39,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }
     }
 
+    // Prefetch and cache all media first to improve performance
+    console.log('Prefetching all media to build global cache...');
+    await fetchAllMedia();
+
     // Fetch all products and inventory data
+    console.log('Fetching product data from Shopify...');
     const [products, inventoryData] = await Promise.all([
       fetchAllProducts(),
       fetchInventoryLevels()
     ]);
 
-    // Transform data for LLM consumption
-    const transformedData = transformDataForLLM(products, inventoryData);
+    // Transform data for LLM consumption with async processing
+    console.log('Transforming product data for LLM consumption...');
+    const transformedData = await transformDataForLLM(products, inventoryData);
     
     // Prepare response data
     const responseData: ProductsResponse = {
@@ -58,6 +65,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     
     // Cache the response data
     cache.set(PRODUCTS_CACHE_KEY, responseData, DEFAULT_CACHE_TTL);
+    
+    console.log(`Successfully processed ${transformedData.length} products`);
     
     // Return the data
     return json(responseData);
