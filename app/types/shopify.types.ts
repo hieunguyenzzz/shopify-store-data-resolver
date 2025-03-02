@@ -73,6 +73,7 @@ export interface ProductsResponse {
   totalProducts: number;
   timestamp: string;
   fromCache?: boolean;
+  estimatedTokens?: number;
 }
 
 export interface ProductResponse {
