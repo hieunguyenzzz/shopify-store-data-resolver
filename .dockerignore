@@ -1,0 +1,31 @@
+# Dependency directories
+node_modules/
+
+# Build output
+build/
+
+# Environment files (now explicitly ignored)
+.env
+.env.local
+.env.production
+
+# Git
+.git
+.gitignore
+
+# Development files
+*.log
+.eslintcache
+.DS_Store
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Misc
+.cache/
+coverage/
+dist/
+tmp/ 
