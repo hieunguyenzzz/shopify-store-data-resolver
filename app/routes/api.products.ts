@@ -13,7 +13,7 @@ import { encoding_for_model } from 'tiktoken';
 // Cache key for products data
 const PRODUCTS_CACHE_KEY = 'shopify_products_data';
 // Default cache time: 1 hour (in seconds)
-const DEFAULT_CACHE_TTL = 60 * 60;
+const DEFAULT_CACHE_TTL = 60 * 60 * 24 * 30 * 12;
 
 /**
  * Estimate number of tokens using tiktoken

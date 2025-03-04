@@ -1,9 +1,9 @@
 import dotenv from 'dotenv';
+import { Page } from '~/types/shopify-generated';
 import type { 
   ShopifyProduct, 
   ShopifyVariant,
   ShopifyMetafield,
-  ShopifyPage
 } from '~/types/shopify.types';
 
 // Load environment variables
@@ -1052,7 +1052,7 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
 /**
  * Fetch all pages using GraphQL pagination
  */
-export async function fetchAllPages(): Promise<ShopifyPage[]> {
+export async function fetchAllPages(): Promise<Page[]> {
   const query = `
     query GetAllPages($first: Int!, $after: String) {
       pages(first: $first, after: $after) {
@@ -1068,6 +1068,7 @@ export async function fetchAllPages(): Promise<ShopifyPage[]> {
           createdAt
           updatedAt
           publishedAt
+          templateSuffix
           metafields(first: 25) {
             nodes {
               namespace
@@ -1127,35 +1128,13 @@ export async function fetchAllPages(): Promise<ShopifyPage[]> {
 /**
  * Transform pages data for LLM consumption
  */
-export async function transformPagesForLLM(pages: any[]): Promise<ShopifyPage[]> {
-  
-  const transformedPages = [];
-  
-  for (const page of pages) {
-    // Process page metafields to resolve file references
-    const pageMetafields = page.metafields?.nodes || [];
-    const processedPageMetafields = await processMetafieldsWithFetch(
-      pageMetafields, 
-      [], // No images for pages
-      [], // No media for pages
-      globalMediaCache || undefined
-    );
-    
-    // Transform the page data
-    transformedPages.push({
-      id: page.id,
-      handle: page.handle,
-      title: page.title,
-      body: page.body,
-      bodyHtml: page.body, // Use body as a fallback for bodyHtml
-      author: '', // Remove author field
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-      publishedAt: page.publishedAt,
-      metafields: processedPageMetafields,
-      url: `https://${SHOPIFY_SHOP_URL}/pages/${page.handle}`,
-    });
-  }
-  
-  return transformedPages;
+export async function transformPagesForLLM(pages: any[]): Promise<Page[]> {
+  return pages.map(page => ({
+    ...page,
+    bodyHtml: page.body,
+    author: '',
+    url: `https://${SHOPIFY_SHOP_URL}/pages/${page.handle}`,
+    events: [], // Add this to match the HasEvents requirement
+    metafields: page.metafields?.nodes || []
+  }));
 } 

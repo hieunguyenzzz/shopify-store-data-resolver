@@ -2,6 +2,8 @@
  * Shopify Product type definitions
  */
 
+import { Page } from "./shopify-generated";
+
 export interface ShopifyMetafield {
   namespace: string;
   key: string;
@@ -95,23 +97,10 @@ export interface ErrorResponse {
   error: string;
 }
 
-export interface ShopifyPage {
-  id: string;
-  handle: string;
-  title: string;
-  body: string;
-  bodyHtml: string;
-  author: string;
-  createdAt: string;
-  updatedAt: string;
-  publishedAt: string | null;
-  metafields: ShopifyMetafield[];
-  url: string;
-}
 
 export interface PagesResponse {
   success: boolean;
-  pages: ShopifyPage[];
+  pages: Page[];
   totalPages: number;
   timestamp: string;
   fromCache?: boolean;
