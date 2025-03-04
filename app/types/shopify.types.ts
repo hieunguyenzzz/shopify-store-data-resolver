@@ -93,4 +93,27 @@ export interface SearchResponse {
 export interface ErrorResponse {
   success: false;
   error: string;
+}
+
+export interface ShopifyPage {
+  id: string;
+  handle: string;
+  title: string;
+  body: string;
+  bodyHtml: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+  metafields: ShopifyMetafield[];
+  url: string;
+}
+
+export interface PagesResponse {
+  success: boolean;
+  pages: ShopifyPage[];
+  totalPages: number;
+  timestamp: string;
+  fromCache?: boolean;
+  estimatedTokens?: number;
 } 

@@ -2,7 +2,8 @@ import dotenv from 'dotenv';
 import type { 
   ShopifyProduct, 
   ShopifyVariant,
-  ShopifyMetafield
+  ShopifyMetafield,
+  ShopifyPage
 } from '~/types/shopify.types';
 
 // Load environment variables
@@ -1046,4 +1047,115 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
   }
   
   return transformedProducts;
+}
+
+/**
+ * Fetch all pages using GraphQL pagination
+ */
+export async function fetchAllPages(): Promise<ShopifyPage[]> {
+  const query = `
+    query GetAllPages($first: Int!, $after: String) {
+      pages(first: $first, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          handle
+          title
+          body
+          createdAt
+          updatedAt
+          publishedAt
+          metafields(first: 25) {
+            nodes {
+              namespace
+              key
+              value
+              type
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    console.log('Fetching pages from Shopify...');
+    
+    const batchSize = 50; 
+    let hasNextPage = true;
+    let after: string | null = null;
+    let allPages: any[] = [];
+    
+    while (hasNextPage) {
+      const variables = {
+        first: batchSize,
+        after,
+      };
+
+      console.log(`Fetching pages batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(query, variables);
+      
+      if (response.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+
+      const { pages } = response.data;
+      allPages = [...allPages, ...pages.nodes];
+      
+      console.log(`Fetched ${pages.nodes.length} pages, total now: ${allPages.length}`);
+
+      hasNextPage = pages.pageInfo.hasNextPage;
+      after = pages.pageInfo.endCursor;
+      
+      // Add a small delay between requests to avoid rate limiting
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    console.log(`Completed fetching all pages. Total: ${allPages.length}`);
+    return allPages;
+  } catch (error) {
+    console.error('Error fetching pages:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transform pages data for LLM consumption
+ */
+export async function transformPagesForLLM(pages: any[]): Promise<ShopifyPage[]> {
+  
+  const transformedPages = [];
+  
+  for (const page of pages) {
+    // Process page metafields to resolve file references
+    const pageMetafields = page.metafields?.nodes || [];
+    const processedPageMetafields = await processMetafieldsWithFetch(
+      pageMetafields, 
+      [], // No images for pages
+      [], // No media for pages
+      globalMediaCache || undefined
+    );
+    
+    // Transform the page data
+    transformedPages.push({
+      id: page.id,
+      handle: page.handle,
+      title: page.title,
+      body: page.body,
+      bodyHtml: page.body, // Use body as a fallback for bodyHtml
+      author: '', // Remove author field
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
+      publishedAt: page.publishedAt,
+      metafields: processedPageMetafields,
+      url: `https://${SHOPIFY_SHOP_URL}/pages/${page.handle}`,
+    });
+  }
+  
+  return transformedPages;
 } 
