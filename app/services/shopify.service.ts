@@ -209,6 +209,7 @@ export async function fetchProductsSimplified(): Promise<any[]> {
               id
               title
               image {
+                altText: string;
                 url
               }
               sku
@@ -247,9 +248,18 @@ export async function fetchProductsSimplified(): Promise<any[]> {
             type
           }
         }
+        seo {
+          title
+          description
+        }
         variants(first: 100) {
           nodes {
             id
+            sku
+            image {
+              altText: string;
+              url
+            }
             metafields(first: 15) {
               nodes {
                 namespace
@@ -404,6 +414,11 @@ export async function fetchAllProducts(): Promise<any[]> {
           productType
           tags
           vendor
+          seo {
+            title
+            description
+          }
+          templateSuffix
           options {
             id
             name
@@ -421,6 +436,10 @@ export async function fetchAllProducts(): Promise<any[]> {
             nodes {
               id
               title
+              image {
+                altText              
+                url
+              }
               sku
               price
               compareAtPrice
@@ -1038,6 +1057,7 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
     // Transform the product data
     transformedProducts.push({
       id: product.id,
+      seo: product.seo,
       handle: product.handle,
       title: product.title,
       description: product.description,
