@@ -199,10 +199,18 @@ export async function fetchProductsSimplified(): Promise<any[]> {
             name
             values
           }
+          seo {
+            title
+            description
+          }
+          templateSuffix
           variants(first: 100) {
             nodes {
               id
               title
+              image {
+                url
+              }
               sku
               price
               compareAtPrice
