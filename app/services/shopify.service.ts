@@ -419,6 +419,7 @@ export async function fetchAllProducts(): Promise<any[]> {
             description
           }
           templateSuffix
+          status
           options {
             id
             name
@@ -1071,6 +1072,7 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
       images: product.images?.nodes || [],
       translations: [], // Empty array instead of fetching translations
       url: `https://${SHOPIFY_SHOP_URL}/products/${product.handle}`,
+      status: product.status, // Add product status
     });
   }
   

@@ -67,6 +67,7 @@ export interface ShopifyProduct {
   images: ShopifyImage[];
   translations: ShopifyTranslation[];
   url: string;
+  status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
 }
 
 export interface ProductsResponse {
