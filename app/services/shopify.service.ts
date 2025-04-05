@@ -1167,4 +1167,133 @@ export async function transformPagesForLLM(pages: any[]): Promise<Page[]> {
     events: [], // Add this to match the HasEvents requirement
     metafields: page.metafields?.nodes || []
   }));
+}
+
+/**
+ * Fetch metaobjects of a specific type using GraphQL pagination
+ * @param type The metaobject type to fetch
+ */
+export async function fetchMetaobjects(type: string): Promise<any[]> {
+  const query = `
+    query GetMetaobjects($type: String!, $first: Int!, $after: String) {
+      metaobjects(type: $type, first: $first, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          handle
+          type
+          displayName
+          updatedAt
+          fields {
+            key
+            value
+            type
+            reference {
+              ... on MediaImage {
+                id
+                image {
+                  url
+                }
+              }
+              ... on Product {
+                id
+                title
+                handle
+              }
+              ... on Collection {
+                id
+                title
+                handle
+              }
+              ... on Metaobject {
+                id
+                type
+                handle
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    console.log(`Fetching metaobjects of type '${type}' from Shopify...`);
+    
+    const batchSize = 50; 
+    let hasNextPage = true;
+    let after: string | null = null;
+    let allMetaobjects: any[] = [];
+    
+    while (hasNextPage) {
+      const variables = {
+        type,
+        first: batchSize,
+        after,
+      };
+
+      console.log(`Fetching metaobjects batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(query, variables);
+      
+      if (response.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+
+      const { metaobjects } = response.data;
+      allMetaobjects = [...allMetaobjects, ...metaobjects.nodes];
+      
+      console.log(`Fetched ${metaobjects.nodes.length} metaobjects, total now: ${allMetaobjects.length}`);
+
+      hasNextPage = metaobjects.pageInfo.hasNextPage;
+      after = metaobjects.pageInfo.endCursor;
+      
+      // Add a small delay between requests to avoid rate limiting
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    console.log(`Completed fetching all metaobjects of type '${type}'. Total: ${allMetaobjects.length}`);
+    return allMetaobjects;
+  } catch (error) {
+    console.error(`Error fetching metaobjects of type '${type}':`, error);
+    throw error;
+  }
+}
+
+/**
+ * Transform metaobjects data for LLM consumption
+ */
+export async function transformMetaobjectsForLLM(metaobjects: any[]): Promise<any[]> {
+  return metaobjects.map(metaobject => {
+    // Transform fields into a more accessible format
+    const fields = metaobject.fields.map((field: any) => {
+      const processedField: ShopifyMetafield = {
+        namespace: 'metaobject',
+        key: field.key,
+        value: field.value,
+        type: field.type
+      };
+      
+      // Process reference fields if present
+      if (field.reference) {
+        // Add reference information to the field
+        processedField.value = JSON.stringify(field.reference);
+      }
+      
+      return processedField;
+    });
+    
+    return {
+      id: metaobject.id,
+      handle: metaobject.handle,
+      type: metaobject.type,
+      displayName: metaobject.displayName || metaobject.handle,
+      fields,
+      updatedAt: metaobject.updatedAt
+    };
+  });
 } 

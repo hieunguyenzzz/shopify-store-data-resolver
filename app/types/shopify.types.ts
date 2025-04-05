@@ -98,11 +98,28 @@ export interface ErrorResponse {
   error: string;
 }
 
-
 export interface PagesResponse {
   success: boolean;
   pages: Page[];
   totalPages: number;
+  timestamp: string;
+  fromCache?: boolean;
+  estimatedTokens?: number;
+}
+
+export interface ShopifyMetaobject {
+  id: string;
+  handle: string;
+  type: string;
+  displayName?: string;
+  fields: ShopifyMetafield[];
+  updatedAt: string;
+}
+
+export interface MetaobjectsResponse {
+  success: boolean;
+  metaobjects: ShopifyMetaobject[];
+  totalMetaobjects: number;
   timestamp: string;
   fromCache?: boolean;
   estimatedTokens?: number;
