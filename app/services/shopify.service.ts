@@ -4,6 +4,7 @@ import type {
   ShopifyProduct, 
   ShopifyVariant,
   ShopifyMetafield,
+  ShopifyFile,
 } from '~/types/shopify.types';
 
 // Load environment variables
@@ -1296,4 +1297,184 @@ export async function transformMetaobjectsForLLM(metaobjects: any[]): Promise<an
       updatedAt: metaobject.updatedAt
     };
   });
-} 
+}
+
+/**
+ * Fetch all files using GraphQL pagination
+ */
+export async function fetchAllFiles(): Promise<any[]> {
+  const query = `
+    query GetAllFiles($first: Int!, $after: String) {
+      files(query: "references_count:>0", first: $first, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          createdAt
+          updatedAt
+          fileStatus
+          alt
+          fileErrors {
+            code
+            message
+            details
+          }
+          preview {
+            image {
+              url
+            }
+          }
+          ... on MediaImage {
+            id
+            image {
+              url
+            }
+          }
+          ... on GenericFile {
+            id
+            url
+          }
+          ... on Video {
+            id
+            originalSource {
+              url
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    console.log('Fetching files from Shopify...');
+    
+    const batchSize = 50; 
+    let hasNextPage = true;
+    let after: string | null = null;
+    let allFiles: any[] = [];
+    
+    while (hasNextPage) {
+      const variables = {
+        first: batchSize,
+        after,
+      };
+
+      console.log(`Fetching files batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(query, variables);
+      
+      if (response.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+
+      const { files } = response.data;
+      allFiles = [...allFiles, ...files.nodes];
+      
+      console.log(`Fetched ${files.nodes.length} files, total now: ${allFiles.length}`);
+
+      hasNextPage = files.pageInfo.hasNextPage;
+      after = files.pageInfo.endCursor;
+      
+      // Add a small delay between requests to avoid rate limiting
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    console.log(`Completed fetching all files. Total: ${allFiles.length}`);
+    return allFiles;
+  } catch (error) {
+    console.error('Error fetching files:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transform files data for LLM consumption
+ */
+export async function transformFilesForLLM(files: any[]): Promise<ShopifyFile[]> {
+  return files.map(file => {
+    // Get the URL based on the file type
+    let url = '';
+    if (file.image?.url) {
+      url = file.image.url;
+    } else if (file.url) {
+      url = file.url;
+    } else if (file.originalSource?.url) {
+      url = file.originalSource.url;
+    } else if (file.preview?.image?.url) {
+      url = file.preview.image.url;
+    }
+    
+    if (!url) {
+      console.warn(`No URL found for file with ID: ${file.id}`);
+      url = '';
+    }
+    
+    // Create filename from URL if needed
+    const filename = url ? url.split('/').pop()?.split('?')[0] || 'unnamed-file' : 'unnamed-file';
+    
+    return {
+      id: file.id,
+      filename: filename,
+      url: url,
+      mediaType: determineMediaType(file, url),
+      originalUploadSize: 0, // We don't have this information anymore
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+      alt: file.alt || undefined,
+      status: file.fileStatus || undefined,
+      mimeType: determineMimeType(file, url)
+    };
+  });
+}
+
+/**
+ * Helper function to determine media type from file data
+ */
+function determineMediaType(file: any, url: string): string {
+  if (file.image) {
+    return 'IMAGE';
+  } else if (file.originalSource) {
+    return 'VIDEO';
+  } else if (url.match(/\.(mp4|mov|avi|wmv|flv|webm)$/i)) {
+    return 'VIDEO';
+  } else if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+    return 'IMAGE';
+  } else if (url.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar)$/i)) {
+    return 'DOCUMENT';
+  }
+  return 'OTHER';
+}
+
+/**
+ * Helper function to determine MIME type from URL
+ */
+function determineMimeType(file: any, url: string): string {
+  const extension = url.split('.').pop()?.split('?')[0]?.toLowerCase();
+  
+  if (!extension) {
+    return 'application/octet-stream';
+  }
+  
+  const mimeTypes: Record<string, string> = {
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime',
+    'avi': 'video/x-msvideo',
+    'webm': 'video/webm'
+  };
+  
+  return mimeTypes[extension] || 'application/octet-stream';
+}

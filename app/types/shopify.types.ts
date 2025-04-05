@@ -123,4 +123,26 @@ export interface MetaobjectsResponse {
   timestamp: string;
   fromCache?: boolean;
   estimatedTokens?: number;
+}
+
+export interface ShopifyFile {
+  id: string;
+  filename: string;
+  url: string;
+  mediaType: string;
+  originalUploadSize: number;
+  createdAt: string;
+  updatedAt: string;
+  alt?: string;
+  status?: string;
+  mimeType?: string;
+}
+
+export interface FilesResponse {
+  success: boolean;
+  files: ShopifyFile[];
+  totalFiles: number;
+  timestamp: string;
+  fromCache?: boolean;
+  estimatedTokens?: number;
 } 
