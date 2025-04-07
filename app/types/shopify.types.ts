@@ -2,7 +2,7 @@
  * Shopify Product type definitions
  */
 
-import { Page } from "./shopify-generated";
+import { Page, Collection } from "./shopify-generated";
 
 export interface ShopifyMetafield {
   namespace: string;
@@ -142,6 +142,38 @@ export interface FilesResponse {
   success: boolean;
   files: ShopifyFile[];
   totalFiles: number;
+  timestamp: string;
+  fromCache?: boolean;
+  estimatedTokens?: number;
+}
+
+// Adding Collection types based on the Shopify GraphQL documentation
+export interface ShopifyCollection {
+  id: string;
+  handle: string;
+  title: string;
+  updatedAt: string;
+  descriptionHtml: string | null;
+  sortOrder: string; // Example: "MANUAL"
+  templateSuffix: string | null;
+  products: {
+    nodes: {
+      id: string;
+      title: string;
+      handle: string;
+    }[];
+    pageInfo: {
+      hasNextPage: boolean;
+    };
+  };
+  // Add other relevant fields as needed based on GraphQL schema
+  // e.g., image, rules, etc.
+}
+
+export interface CollectionsResponse {
+  success: boolean;
+  collections: ShopifyCollection[];
+  totalCollections: number;
   timestamp: string;
   fromCache?: boolean;
   estimatedTokens?: number;

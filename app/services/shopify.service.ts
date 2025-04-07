@@ -1,11 +1,14 @@
 import dotenv from 'dotenv';
 import { Page } from '~/types/shopify-generated';
-import type { 
-  ShopifyProduct, 
+import {
+  ShopifyProduct,
   ShopifyVariant,
+  ShopifyImage,
   ShopifyMetafield,
   ShopifyFile,
+  ShopifyCollection,
 } from '~/types/shopify.types';
+import { cache } from '~/utils/cache';
 
 // Load environment variables
 dotenv.config();
@@ -16,6 +19,12 @@ const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-01';
 
 // Global media cache to store all media items
 let globalMediaCache: Map<string, string> | null = null;
+
+// Utility function for delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Cache keys and TTL
+const PRODUCTS_CACHE_KEY = 'shopify_products';
 
 /**
  * Execute a GraphQL query against the Shopify Admin API
@@ -550,105 +559,111 @@ export async function fetchAllProducts(): Promise<any[]> {
 }
 
 /**
- * Fetch inventory levels for products
+ * Fetches all inventory levels from Shopify using pagination.
  */
 export async function fetchInventoryLevels(): Promise<any[]> {
-  // Skipping inventory data as requested
-  console.log('Skipping inventory data fetch as requested');
-  return [];
-
-  // Original implementation commented out
-  /*
   const query = `
-    query GetInventoryLevels($first: Int!, $after: String) {
-      locations(first: 10) {
-        nodes {
-          id
-          name
-          inventoryLevels(first: $first, after: $after) {
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-            nodes {
+    query GetAllInventoryLevels($first: Int!, $after: String) {
+      inventoryLevels(first: $first, after: $after) {
+        edges {
+          node {
+            id
+            available
+            location {
               id
-              available
-              inventoryItem {
+              name
+            }
+            inventoryItem {
+              id
+              sku
+              # Attempt to get variant and product ID directly if available
+              variant {
                 id
-                variant {
+                product {
                   id
-                  product {
-                    id
-                  }
                 }
               }
             }
           }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
     }
   `;
 
   let allInventory: any[] = [];
-  const locations: any[] = [];
-  
-  // Get all locations first
-  const locationsResponse = await executeGraphQL(`
-    query GetLocations {
-      locations(first: 50) {
-        nodes {
-          id
-          name
-        }
-      }
-    }
-  `);
-  
-  if (locationsResponse.data?.locations?.nodes) {
-    locations.push(...locationsResponse.data.locations.nodes);
-  }
+  let hasNextPage = true;
+  let after: string | null = null;
+  let pageCount = 0;
+  const maxPages = 50; // Safety break for pagination
+  const batchSize = 100; // Fetch 100 items per page
+  const delayMs = 500; // Delay between requests
 
-  // For each location, fetch inventory data with pagination
-  for (const location of locations) {
-    let hasNextPage = true;
-    let after = null;
-    
-    while (hasNextPage) {
-      const variables = {
-        first: 100,
-        after,
-      };
-      
+  console.log('Fetching inventory levels from Shopify...');
+
+  while (hasNextPage && pageCount < maxPages) {
+    pageCount++;
+    const variables = {
+      first: batchSize,
+      after,
+    };
+
+    try {
+      console.log(`Fetching inventory page ${pageCount} (batch size ${batchSize}), cursor: ${after || 'Start'}`);
+      // Use the executeGraphQL function defined in this file
       const response = await executeGraphQL(query, variables);
-      
+
       if (response.errors) {
+        console.error('GraphQL Error fetching inventory levels:', JSON.stringify(response.errors, null, 2));
+        // Treat all GraphQL errors during pagination as reason to stop.
         throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
       }
-      
-      const locationData = response.data.locations.nodes.find(
-        (node: any) => node.id === location.id
-      );
-      
-      if (locationData) {
-        allInventory = [
-          ...allInventory,
-          ...locationData.inventoryLevels.nodes.map((node: any) => ({
-            ...node,
-            locationId: location.id,
-            locationName: location.name,
-          })),
-        ];
-        
-        hasNextPage = locationData.inventoryLevels.pageInfo.hasNextPage;
-        after = locationData.inventoryLevels.pageInfo.endCursor;
+
+      const data = response.data?.inventoryLevels;
+
+      if (data?.edges && data.edges.length > 0) {
+        const processedItems = data.edges.map((edge: any) => ({
+          inventoryLevelId: edge.node.id,
+          available: edge.node.available,
+          locationId: edge.node.location?.id, // Handle potential null location
+          locationName: edge.node.location?.name, // Handle potential null location
+          inventoryItemId: edge.node.inventoryItem?.id, // Handle potential null inventoryItem
+          sku: edge.node.inventoryItem?.sku, // Handle potential null inventoryItem
+          variantId: edge.node.inventoryItem?.variant?.id, // Handle potential nulls down the chain
+          productId: edge.node.inventoryItem?.variant?.product?.id, // Handle potential nulls down the chain
+        }));
+        allInventory = [...allInventory, ...processedItems];
+        console.log(`Processed ${processedItems.length} items from page ${pageCount}. Total: ${allInventory.length}`);
       } else {
-        hasNextPage = false;
+          console.log(`No inventory items found on page ${pageCount}.`);
       }
+
+      hasNextPage = data?.pageInfo?.hasNextPage ?? false;
+      after = data?.pageInfo?.endCursor ?? null;
+
+      if (hasNextPage) {
+        console.log(`Next page exists, cursor: ${after}. Waiting ${delayMs}ms...`);
+        // Use the sleep function defined in this file
+        await sleep(delayMs);
+      }
+
+    } catch (error) {
+      console.error(`Error fetching inventory levels page ${pageCount}:`, error);
+      // Stop pagination on error to prevent further issues
+      hasNextPage = false;
+      console.log('Stopping inventory pagination due to error.');
     }
   }
-  
+
+  if (pageCount === maxPages && hasNextPage) {
+    console.warn(`Reached maximum page limit (${maxPages}) for inventory levels. Data might be incomplete.`);
+  }
+
+  console.log(`Finished fetching inventory levels. Fetched ${pageCount} pages, total ${allInventory.length} records.`);
   return allInventory;
-  */
 }
 
 // Query to fetch a media item directly by ID
@@ -1081,9 +1096,11 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
 }
 
 /**
- * Fetch all pages using GraphQL pagination
+ * Fetches all pages from Shopify using GraphQL pagination.
  */
 export async function fetchAllPages(): Promise<Page[]> {
+  console.log('Fetching all pages from Shopify...');
+  const pages: Page[] = [];
   const query = `
     query GetAllPages($first: Int!, $after: String) {
       pages(first: $first, after: $after) {
@@ -1093,81 +1110,170 @@ export async function fetchAllPages(): Promise<Page[]> {
         }
         nodes {
           id
-          handle
           title
+          handle
           body
+          bodySummary
           createdAt
           updatedAt
-          publishedAt
-          templateSuffix
-          metafields(first: 25) {
-            nodes {
-              namespace
-              key
-              value
-              type
-            }
+          onlineStoreUrl
+          seo {
+            title
+            description
           }
+          templateSuffix
+          // Add any other relevant fields
         }
       }
     }
   `;
 
   try {
-    console.log('Fetching pages from Shopify...');
-    
-    const batchSize = 50; 
     let hasNextPage = true;
     let after: string | null = null;
-    let allPages: any[] = [];
-    
-    while (hasNextPage) {
-      const variables = {
-        first: batchSize,
-        after,
-      };
+    const batchSize = 50; // Adjust batch size as needed
 
+    while (hasNextPage) {
+      const variables = { first: batchSize, after };
       console.log(`Fetching pages batch after cursor: ${after || 'Start'}`);
       const response = await executeGraphQL(query, variables);
-      
+
       if (response.errors) {
         throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
       }
 
-      const { pages } = response.data;
-      allPages = [...allPages, ...pages.nodes];
-      
-      console.log(`Fetched ${pages.nodes.length} pages, total now: ${allPages.length}`);
+      const { nodes, pageInfo } = response.data.pages;
+      pages.push(...nodes);
 
-      hasNextPage = pages.pageInfo.hasNextPage;
-      after = pages.pageInfo.endCursor;
-      
-      // Add a small delay between requests to avoid rate limiting
+      hasNextPage = pageInfo.hasNextPage;
+      after = pageInfo.endCursor;
+
       if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await sleep(300); // Delay to avoid rate limits
       }
     }
-    
-    console.log(`Completed fetching all pages. Total: ${allPages.length}`);
-    return allPages;
+
+    console.log(`Fetched ${pages.length} pages successfully.`);
+    return pages;
   } catch (error) {
-    console.error('Error fetching pages:', error);
+    console.error('Error fetching all pages:', error);
     throw error;
   }
 }
 
 /**
- * Transform pages data for LLM consumption
+ * Transforms the raw page data into a format suitable for LLM consumption.
+ * Currently, it returns the pages as is, assuming the fetched structure is sufficient.
  */
 export async function transformPagesForLLM(pages: any[]): Promise<Page[]> {
-  return pages.map(page => ({
-    ...page,
-    bodyHtml: page.body,
-    author: '',
-    url: `https://${SHOPIFY_SHOP_URL}/pages/${page.handle}`,
-    events: [], // Add this to match the HasEvents requirement
-    metafields: page.metafields?.nodes || []
-  }));
+  console.log(`Transforming ${pages.length} pages for LLM...`);
+  // Perform any necessary transformations here
+  // For now, we return the structure fetched from Shopify
+  return pages as Page[];
+}
+
+/**
+ * Fetches all collections from Shopify using GraphQL pagination.
+ */
+export async function fetchAllCollections(): Promise<any[]> { // Return type can be refined to ShopifyCollection[] later
+  console.log('Fetching all collections from Shopify...');
+  const collections: any[] = []; // Use any[] for now, refine later
+  const query = `
+    query GetAllCollections($first: Int!, $after: String) {
+      collections(first: $first, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          handle
+          title
+          updatedAt
+          descriptionHtml
+          # publishedOnCurrentPublication - removed by user
+          sortOrder
+          templateSuffix
+          # Products will be fetched separately for each collection
+        }
+      }
+    }
+  `;
+
+  try {
+    let hasNextPage = true;
+    let after: string | null = null;
+    const batchSize = 50; // Adjust batch size as needed
+
+    while (hasNextPage) {
+      const variables = { first: batchSize, after };
+      console.log(`Fetching collections batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(query, variables);
+
+      if (response.errors) {
+        // Handle potential throttling errors
+        if (response.errors.some((e: any) => e.extensions?.code === 'THROTTLED')) {
+          console.warn('GraphQL request throttled. Retrying after delay...');
+          await sleep(5000); // Wait 5 seconds before retrying
+          continue; // Retry the same batch
+        }
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+
+      if (!response.data || !response.data.collections) {
+        throw new Error('Invalid response structure from Shopify API for collections.');
+      }
+
+      const { nodes, pageInfo } = response.data.collections;
+      collections.push(...nodes);
+
+      hasNextPage = pageInfo.hasNextPage;
+      after = pageInfo.endCursor;
+
+      if (hasNextPage) {
+        await sleep(300); // Delay to avoid rate limits
+      }
+    }
+
+    console.log(`Fetched ${collections.length} collections successfully.`);
+    return collections;
+  } catch (error) {
+    console.error('Error fetching all collections:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transforms the raw collection data into a format suitable for LLM consumption.
+ * Fetches all products for each collection separately.
+ */
+export async function transformCollectionsForLLM(collections: any[]): Promise<ShopifyCollection[]> {
+  console.log(`Transforming ${collections.length} collections for LLM...`);
+  
+  const transformedCollections: ShopifyCollection[] = [];
+
+  for (const collection of collections) {
+    // Fetch all products for the current collection
+    const products = await fetchProductsForCollection(collection.id);
+    
+    // Construct the final collection object
+    const transformedCollection: ShopifyCollection = {
+      ...collection,
+      // Ensure the products structure matches the ShopifyCollection type
+      products: {
+        nodes: products, // Assign the fully fetched products list
+        pageInfo: {
+          // Since we fetched all, hasNextPage is always false
+          hasNextPage: false 
+        }
+      }
+    };
+    
+    transformedCollections.push(transformedCollection);
+  }
+  
+  console.log(`Finished transforming ${transformedCollections.length} collections with all products.`);
+  return transformedCollections;
 }
 
 /**
@@ -1477,4 +1583,83 @@ function determineMimeType(file: any, url: string): string {
   };
   
   return mimeTypes[extension] || 'application/octet-stream';
+}
+
+/**
+ * Fetches all products for a specific collection using pagination.
+ * @param collectionId The ID of the collection.
+ */
+async function fetchProductsForCollection(collectionId: string): Promise<any[]> {
+  console.log(`Fetching all products for collection ${collectionId}...`);
+  const products: any[] = [];
+  const query = `
+    query GetCollectionProducts($id: ID!, $first: Int!, $after: String) {
+      collection(id: $id) {
+        id
+        products(first: $first, after: $after) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            id
+            title
+            handle
+            # Add other product fields if needed later
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    let hasNextPage = true;
+    let after: string | null = null;
+    const batchSize = 50; // Adjust batch size as needed
+
+    while (hasNextPage) {
+      const variables = { id: collectionId, first: batchSize, after };
+      console.log(`Fetching products for collection ${collectionId}, batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(query, variables);
+
+      if (response.errors) {
+        // Handle potential throttling errors
+        if (response.errors.some((e: any) => e.extensions?.code === 'THROTTLED')) {
+          console.warn(`GraphQL request throttled for collection ${collectionId}. Retrying after delay...`);
+          await sleep(5000);
+          continue; // Retry
+        }
+        throw new Error(`GraphQL Error fetching products for collection ${collectionId}: ${JSON.stringify(response.errors)}`);
+      }
+
+      const collectionData = response.data?.collection;
+      if (!collectionData || !collectionData.products) {
+          // Collection might be empty or deleted, or API structure changed
+          console.warn(`No product data found for collection ${collectionId} in response. Moving to next page/collection.`);
+          // If the collection itself wasn't found, stop pagination for it.
+          if (!collectionData) hasNextPage = false;
+          else {
+             // If collection exists but no products field, assume end of products
+             hasNextPage = collectionData.products?.pageInfo?.hasNextPage ?? false;
+             after = collectionData.products?.pageInfo?.endCursor ?? null; 
+          }
+      } else {
+          const { nodes, pageInfo } = collectionData.products;
+          products.push(...nodes);
+          hasNextPage = pageInfo.hasNextPage;
+          after = pageInfo.endCursor;
+      }
+
+      if (hasNextPage) {
+        await sleep(300); // Delay to avoid rate limits
+      }
+    }
+
+    console.log(`Fetched ${products.length} products for collection ${collectionId}.`);
+    return products;
+  } catch (error) {
+    console.error(`Error fetching products for collection ${collectionId}:`, error);
+    // Return empty array or re-throw depending on desired error handling
+    return []; 
+  }
 }
