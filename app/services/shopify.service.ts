@@ -1194,6 +1194,14 @@ export async function fetchAllCollections(): Promise<any[]> { // Return type can
           # publishedOnCurrentPublication - removed by user
           sortOrder
           templateSuffix
+          ruleSet {
+            appliedDisjunctively
+            rules {
+              column
+              relation
+              condition
+            }
+          }
           # Products will be fetched separately for each collection
         }
       }
