@@ -69,6 +69,7 @@ export interface ShopifyProduct {
   url: string;
   status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
   templateSuffix?: string | null;
+  publication_ids?: string;
   seo?: {
     title: string;
     description: string;

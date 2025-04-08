@@ -214,6 +214,8 @@ export async function fetchProductsSimplified(): Promise<any[]> {
             description
           }
           templateSuffix
+          publication_ids
+          status
           variants(first: 100) {
             nodes {
               id
@@ -429,6 +431,7 @@ export async function fetchAllProducts(): Promise<any[]> {
             description
           }
           templateSuffix
+          publication_ids
           status
           options {
             id
@@ -1090,6 +1093,7 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
       url: `https://${SHOPIFY_SHOP_URL}/products/${product.handle}`,
       status: product.status, // Add product status
       templateSuffix: product.templateSuffix, // Add templateSuffix
+      publication_ids: product.publication_ids, // Add publication_ids
     });
   }
   
