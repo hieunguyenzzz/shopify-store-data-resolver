@@ -1202,6 +1202,10 @@ export async function fetchAllCollections(): Promise<any[]> { // Return type can
               condition
             }
           }
+          image {
+            url
+            altText
+          }
           # Products will be fetched separately for each collection
         }
       }
