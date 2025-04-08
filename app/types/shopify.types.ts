@@ -68,6 +68,11 @@ export interface ShopifyProduct {
   translations: ShopifyTranslation[];
   url: string;
   status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+  templateSuffix?: string | null;
+  seo?: {
+    title: string;
+    description: string;
+  };
 }
 
 export interface ProductsResponse {

@@ -1089,6 +1089,7 @@ export async function transformDataForLLM(products: any[], inventoryData: any[])
       translations: [], // Empty array instead of fetching translations
       url: `https://${SHOPIFY_SHOP_URL}/products/${product.handle}`,
       status: product.status, // Add product status
+      templateSuffix: product.templateSuffix, // Add templateSuffix
     });
   }
   
