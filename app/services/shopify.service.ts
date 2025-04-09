@@ -1121,13 +1121,9 @@ export async function fetchAllPages(): Promise<Page[]> {
           bodySummary
           createdAt
           updatedAt
-          onlineStoreUrl
-          seo {
-            title
-            description
-          }
+          isPublished        
+          publishedAt
           templateSuffix
-          // Add any other relevant fields
         }
       }
     }
