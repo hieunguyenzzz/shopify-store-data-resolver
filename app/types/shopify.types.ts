@@ -183,4 +183,27 @@ export interface CollectionsResponse {
   timestamp: string;
   fromCache?: boolean;
   estimatedTokens?: number;
+}
+
+/**
+ * Shopify URL Redirect type definitions
+ */
+
+export interface ShopifyRedirect {
+  id: string;
+  path: string;
+  target: string;
+}
+
+// For now, the transformed redirect is the same as the Shopify redirect
+// This allows for future modifications if needed for LLM consumption
+export type TransformedRedirect = ShopifyRedirect;
+
+export interface RedirectsResponse {
+  success: boolean;
+  redirects: TransformedRedirect[];
+  totalRedirects: number;
+  timestamp: string;
+  fromCache?: boolean;
+  estimatedTokens?: number;
 } 

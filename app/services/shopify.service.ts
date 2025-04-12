@@ -7,6 +7,8 @@ import {
   ShopifyMetafield,
   ShopifyFile,
   ShopifyCollection,
+  ShopifyRedirect,
+  TransformedRedirect,
 } from '~/types/shopify.types';
 import { cache } from '~/utils/cache';
 
@@ -25,6 +27,23 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Cache keys and TTL
 const PRODUCTS_CACHE_KEY = 'shopify_products';
+
+// GraphQL Query for URL Redirects with pagination
+const URL_REDIRECTS_QUERY = `
+  query GetUrlRedirects($first: Int!, $after: String) {
+    urlRedirects(first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        path
+        target
+      }
+    }
+  }
+`;
 
 /**
  * Execute a GraphQL query against the Shopify Admin API
@@ -1675,4 +1694,68 @@ async function fetchProductsForCollection(collectionId: string): Promise<any[]> 
     // Return empty array or re-throw depending on desired error handling
     return []; 
   }
+}
+
+/**
+ * Fetch all URL redirects from Shopify, handling pagination.
+ */
+export async function fetchAllRedirects(): Promise<ShopifyRedirect[]> {
+  console.log('Fetching all URL redirects from Shopify...');
+  let allRedirects: ShopifyRedirect[] = [];
+  let hasNextPage = true;
+  let after: string | null = null;
+  const batchSize = 100; // Adjust batch size as needed
+  let fetchedCount = 0;
+
+  try {
+    while (hasNextPage) {
+      const variables = {
+        first: batchSize,
+        after,
+      };
+
+      console.log(`Fetching redirects batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(URL_REDIRECTS_QUERY, variables);
+
+      if (response.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+
+      const { urlRedirects } = response.data;
+      
+      if (!urlRedirects || !urlRedirects.nodes) {
+        console.warn('No redirects data found in response batch.');
+        break; // Exit if data structure is unexpected
+      }
+
+      // Directly use the nodes as they match ShopifyRedirect structure
+      allRedirects = allRedirects.concat(urlRedirects.nodes);
+      fetchedCount += urlRedirects.nodes.length;
+      console.log(`Fetched ${fetchedCount} redirects so far`);
+
+      hasNextPage = urlRedirects.pageInfo.hasNextPage;
+      after = urlRedirects.pageInfo.endCursor;
+
+      // Optional: Add a small delay between requests to avoid rate limiting
+      if (hasNextPage) {
+        await sleep(200); // Adjust delay as needed
+      }
+    }
+
+    console.log(`Completed fetching ${fetchedCount} URL redirects.`);
+    return allRedirects;
+  } catch (error) {
+    console.error('Error fetching all URL redirects:', error);
+    throw error; // Re-throw the error to be handled by the caller
+  }
+}
+
+/**
+ * Transform URL redirects data for LLM consumption.
+ * Currently, this is a pass-through function as the raw data is suitable.
+ */
+export async function transformRedirectsForLLM(redirects: ShopifyRedirect[]): Promise<TransformedRedirect[]> {
+  console.log(`Transforming ${redirects.length} redirects for LLM...`);
+  // For now, the transformation is direct. Add processing logic here if needed in the future.
+  return redirects;
 }
