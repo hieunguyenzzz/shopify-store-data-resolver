@@ -47,21 +47,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Check for API key (optional security measure)
     const url = new URL(request.url);
     const apiKey = url.searchParams.get('apiKey');
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
     
     if (process.env.API_KEY && apiKey !== process.env.API_KEY) {
       return json({ 
         success: false, 
         error: 'Unauthorized' 
       } as ErrorResponse, { status: 401 });
-    }
-
-    // Check if we have cached data and refresh is not forced
-    if (!forceRefresh) {
-      const cachedData = cache.get<FilesResponse>(FILES_CACHE_KEY);
-      if (cachedData) {
-        return json(cachedData);
-      }
     }
 
     // Fetch all files
@@ -78,13 +69,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       files: transformedData,
       totalFiles: transformedData.length,
       timestamp: new Date().toISOString(),
-      fromCache: false,
       // Calculate estimated tokens for the entire response
       estimatedTokens: await estimateTokens(transformedData)
     };
-    
-    // Cache the response data
-    cache.set(FILES_CACHE_KEY, responseData, DEFAULT_CACHE_TTL);
     
     console.log(`Successfully processed ${transformedData.length} files`);
     console.log(`Estimated tokens: ${responseData.estimatedTokens}`);
