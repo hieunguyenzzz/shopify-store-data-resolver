@@ -206,4 +206,37 @@ export interface RedirectsResponse {
   timestamp: string;
   fromCache?: boolean;
   estimatedTokens?: number;
+}
+
+/**
+ * Shopify PriceList type definitions
+ */
+
+export interface ShopifyQuantityPriceBreak {
+  quantity: number;
+  price: string;
+}
+
+export interface ShopifyPriceListPrice {
+  variantId: string;
+  price: string;
+  compareAtPrice?: string | null;
+  originType: string;
+  quantityPriceBreaks?: ShopifyQuantityPriceBreak[];
+}
+
+export interface ShopifyPriceList {
+  id: string;
+  name: string;
+  currency: string;
+  fixedPricesCount: number;
+  prices: ShopifyPriceListPrice[];
+}
+
+export interface PriceListsResponse {
+  success: boolean;
+  priceLists: ShopifyPriceList[];
+  totalPriceLists: number;
+  timestamp: string;
+  fromCache?: boolean;
 } 

@@ -1759,3 +1759,132 @@ export async function transformRedirectsForLLM(redirects: ShopifyRedirect[]): Pr
   // For now, the transformation is direct. Add processing logic here if needed in the future.
   return redirects;
 }
+
+// GraphQL Query for PriceLists with pagination
+const PRICE_LISTS_QUERY = `
+  query GetPriceLists($first: Int!, $after: String) {
+    priceLists(first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        id
+        name
+        currency
+        fixedPricesCount
+        prices(first: 250) {
+          nodes {
+            price {
+              amount
+              currencyCode
+            }
+            compareAtPrice {
+              amount
+              currencyCode
+            }
+            originType
+            variant {
+              id
+            }
+            quantityPriceBreaks(first: 20) {
+              nodes {
+                id
+                minimumQuantity
+                price {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Fetch all price lists from Shopify, handling pagination.
+ * @returns Promise<any[]> Array of price lists
+ */
+export async function fetchAllPriceLists(): Promise<any[]> {
+  console.log('Fetching price lists from Shopify...');
+  
+  try {
+    let hasNextPage = true;
+    let after: string | null = null;
+    const priceLists: any[] = [];
+    const batchSize = 50; // Fetch in batches
+    
+    while (hasNextPage) {
+      const variables = {
+        first: batchSize,
+        after,
+      };
+      
+      console.log(`Fetching price lists batch after cursor: ${after || 'Start'}`);
+      const response = await executeGraphQL(PRICE_LISTS_QUERY, variables);
+      
+      if (response.errors) {
+        throw new Error(`GraphQL Error: ${JSON.stringify(response.errors)}`);
+      }
+      
+      const { priceLists: priceListsData } = response.data;
+      
+      if (priceListsData && priceListsData.nodes) {
+        priceLists.push(...priceListsData.nodes);
+        console.log(`Fetched ${priceListsData.nodes.length} price lists in this batch`);
+      }
+      
+      hasNextPage = priceListsData.pageInfo.hasNextPage;
+      after = priceListsData.pageInfo.endCursor;
+      
+      // Add a small delay between requests to avoid rate limiting
+      if (hasNextPage) {
+        await sleep(300);
+      }
+    }
+    
+    console.log(`Completed fetching ${priceLists.length} price lists`);
+    return priceLists;
+  } catch (error) {
+    console.error('Error fetching price lists:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transform price lists data for LLM consumption.
+ * @param priceLists The raw price lists data from Shopify
+ * @returns Promise<ShopifyPriceList[]> Transformed price lists data
+ */
+export async function transformPriceListsForLLM(priceLists: any[]): Promise<any[]> {
+  console.log(`Transforming ${priceLists.length} price lists for LLM consumption...`);
+  
+  return priceLists.map(priceList => {
+    const prices = priceList.prices.nodes.map((priceNode: any) => {
+      // Transform quantity price breaks if available
+      const quantityPriceBreaks = priceNode.quantityPriceBreaks?.nodes?.map((breakNode: any) => ({
+        quantity: breakNode.minimumQuantity,
+        price: breakNode.price.amount
+      })) || [];
+      
+      return {
+        variantId: priceNode.variant.id,
+        price: priceNode.price.amount,
+        compareAtPrice: priceNode.compareAtPrice?.amount || null,
+        originType: priceNode.originType,
+        quantityPriceBreaks: quantityPriceBreaks.length > 0 ? quantityPriceBreaks : undefined
+      };
+    });
+    
+    return {
+      id: priceList.id,
+      name: priceList.name,
+      currency: priceList.currency,
+      fixedPricesCount: priceList.fixedPricesCount,
+      prices
+    };
+  });
+}
