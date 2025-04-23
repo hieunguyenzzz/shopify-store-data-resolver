@@ -1349,6 +1349,9 @@ export async function fetchMetaobjects(type: string): Promise<any[]> {
                 type
                 handle
               }
+              ... on Video {
+                id                                
+              }
             }
           }
         }
