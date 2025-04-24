@@ -4,14 +4,8 @@ import {
   fetchAllFiles, 
   transformFilesForLLM 
 } from '~/services/shopify.service';
-import { cache } from '~/utils/cache';
 import type { FilesResponse, ErrorResponse } from '~/types/shopify.types';
 import { encoding_for_model } from 'tiktoken';
-
-// Cache key for files data
-const FILES_CACHE_KEY = 'shopify_files_data';
-// Default cache time: 30 days (in seconds)
-const DEFAULT_CACHE_TTL = 60 * 60 * 24 * 30;
 
 /**
  * Estimate number of tokens using tiktoken

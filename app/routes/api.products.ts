@@ -6,14 +6,8 @@ import {
   transformDataForLLM,
   fetchAllMedia
 } from '~/services/shopify.service';
-import { cache } from '~/utils/cache';
 import type { ProductsResponse, ErrorResponse } from '~/types/shopify.types';
 import { encoding_for_model } from 'tiktoken';
-
-// Cache key for products data
-const PRODUCTS_CACHE_KEY = 'shopify_products_data';
-// Default cache time: 1 hour (in seconds)
-const DEFAULT_CACHE_TTL = 60 * 60 * 24 * 3;
 
 /**
  * Estimate number of tokens using tiktoken
@@ -49,21 +43,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Check for API key (optional security measure)
     const url = new URL(request.url);
     const apiKey = url.searchParams.get('apiKey');
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
     
     if (process.env.API_KEY && apiKey !== process.env.API_KEY) {
       return json({ 
         success: false, 
         error: 'Unauthorized' 
       } as ErrorResponse, { status: 401 });
-    }
-
-    // Check if we have cached data and refresh is not forced
-    if (!forceRefresh) {
-      const cachedData = cache.get<ProductsResponse>(PRODUCTS_CACHE_KEY);
-      if (cachedData) {
-        return json(cachedData);
-      }
     }
 
     // Prefetch and cache all media first to improve performance
@@ -87,13 +72,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       products: transformedData,
       totalProducts: transformedData.length,
       timestamp: new Date().toISOString(),
-      fromCache: false,
       // Calculate estimated tokens for the entire response
       estimatedTokens: await estimateTokens(transformedData)
     };
-    
-    // Cache the response data
-    cache.set(PRODUCTS_CACHE_KEY, responseData, DEFAULT_CACHE_TTL);
     
     console.log(`Successfully processed ${transformedData.length} products`);
     console.log(`Estimated tokens: ${responseData.estimatedTokens}`);

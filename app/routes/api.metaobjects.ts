@@ -4,17 +4,8 @@ import {
   fetchMetaobjects, 
   transformMetaobjectsForLLM 
 } from '~/services/shopify.service';
-import { cache } from '~/utils/cache';
 import type { MetaobjectsResponse, ErrorResponse } from '~/types/shopify.types';
 import { encoding_for_model } from 'tiktoken';
-
-// Cache key for metaobjects data with type prefix
-function getCacheKey(type: string): string {
-  return `shopify_metaobjects_${type}`;
-}
-
-// Default cache time: 1 hour (in seconds)
-const DEFAULT_CACHE_TTL = 60 * 60;
 
 /**
  * Estimate number of tokens using tiktoken
@@ -51,7 +42,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const apiKey = url.searchParams.get('apiKey');
     const type = url.searchParams.get('type');
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
     
     // Validate API key if required
     if (process.env.API_KEY && apiKey !== process.env.API_KEY) {
@@ -69,17 +59,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       } as ErrorResponse, { status: 400 });
     }
 
-    // Create cache key specific to this metaobject type
-    const cacheKey = getCacheKey(type);
-
-    // Check if we have cached data and refresh is not forced
-    if (!forceRefresh) {
-      const cachedData = cache.get<MetaobjectsResponse>(cacheKey);
-      if (cachedData) {
-        return json(cachedData);
-      }
-    }
-
     // Fetch metaobjects
     console.log(`Fetching metaobject data of type '${type}' from Shopify...`);
     const metaobjects = await fetchMetaobjects(type);
@@ -94,13 +73,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       metaobjects: transformedData,
       totalMetaobjects: transformedData.length,
       timestamp: new Date().toISOString(),
-      fromCache: false,
       // Calculate estimated tokens for the entire response
       estimatedTokens: await estimateTokens(transformedData)
     };
-    
-    // Cache the response data
-    cache.set(cacheKey, responseData, DEFAULT_CACHE_TTL);
     
     console.log(`Successfully processed ${transformedData.length} metaobjects of type '${type}'`);
     console.log(`Estimated tokens: ${responseData.estimatedTokens}`);
