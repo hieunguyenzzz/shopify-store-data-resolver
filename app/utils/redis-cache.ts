@@ -4,20 +4,13 @@ import Redis from 'ioredis';
  * Redis cache configuration and client setup
  */
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
 
 // Create Redis client with proper configuration
 const createRedisClient = () => {
   const redis = new Redis(REDIS_URL, {
-    password: REDIS_PASSWORD,
-    retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
     lazyConnect: true,
     keepAlive: 30000,
-    // Handle connection errors gracefully
-    onClusterReady: () => console.log('Redis cluster ready'),
-    onFailover: () => console.log('Redis failover occurred'),
-    onNodeError: (err, address) => console.error(`Redis node error at ${address}:`, err),
   });
 
   redis.on('connect', () => {
