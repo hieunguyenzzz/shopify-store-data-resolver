@@ -354,9 +354,9 @@ export async function fetchProductsSimplified(): Promise<any[]> {
       hasNextPage = products.pageInfo.hasNextPage;
       after = products.pageInfo.endCursor;
       
-      // Add a small delay between requests
+      // Add a larger delay between requests to avoid API exhaustion
       if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Increased to 1.5 seconds
       }
     }
     
@@ -402,8 +402,8 @@ export async function fetchProductsSimplified(): Promise<any[]> {
         
         enrichedProducts.push(enrichedProduct);
         
-        // Add a small delay between requests
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Add a larger delay between requests to avoid API exhaustion
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Increased to 1 second
       } catch (error) {
         console.warn(`Error enriching product ${product.id}:`, error);
         enrichedProducts.push(product);
@@ -554,9 +554,9 @@ export async function fetchAllProducts(): Promise<any[]> {
       hasNextPage = products.pageInfo.hasNextPage;
       after = products.pageInfo.endCursor;
       
-      // Add a small delay between requests to avoid rate limiting issues
+      // Add a larger delay between requests to avoid exhausting the Shopify API
       if (hasNextPage) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2 seconds
       }
     }
     
@@ -1053,10 +1053,10 @@ function processMetafields(
 }
 
 /**
- * Transforms product and inventory data into a format optimized for LLM consumption
+ * Transforms product data into a format optimized for LLM consumption
  * Now uses async/await to handle metafield processing
  */
-export async function transformDataForLLM(products: any[], inventoryData: any[]): Promise<ShopifyProduct[]> {
+export async function transformDataForLLM(products: any[]): Promise<ShopifyProduct[]> {
   // Fetch all media upfront and build the cache
   await fetchAllMedia();
   

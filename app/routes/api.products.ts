@@ -2,12 +2,12 @@ import { json } from '@remix-run/node';
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { 
   fetchAllProducts, 
-  fetchInventoryLevels, 
   transformDataForLLM,
   fetchAllMedia
 } from '~/services/shopify.service';
 import type { ProductsResponse, ErrorResponse } from '~/types/shopify.types';
 import { encoding_for_model } from 'tiktoken';
+import { productCache } from '~/utils/redis-cache';
 
 /**
  * Estimate number of tokens using tiktoken
@@ -43,6 +43,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Check for API key (optional security measure)
     const url = new URL(request.url);
     const apiKey = url.searchParams.get('apiKey');
+    const useCache = url.searchParams.get('cache') === 'true';
+    const cacheKey = 'shopify_products_all';
     
     if (process.env.API_KEY && apiKey !== process.env.API_KEY) {
       return json({ 
@@ -51,20 +53,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
       } as ErrorResponse, { status: 401 });
     }
 
+    // Check Redis cache first if cache parameter is true
+    if (useCache) {
+      console.log('Checking Redis cache for product data...');
+      try {
+        const cachedData = await productCache.get<ProductsResponse>(cacheKey);
+        if (cachedData) {
+          console.log('Returning cached product data from Redis');
+          return json({
+            ...cachedData,
+            fromCache: true,
+            timestamp: new Date().toISOString()
+          });
+        }
+        console.log('No cached data found in Redis, fetching from Shopify...');
+      } catch (cacheError) {
+        console.warn('Redis cache error, falling back to Shopify API:', cacheError);
+      }
+    }
+
     // Prefetch and cache all media first to improve performance
     console.log('Prefetching all media to build global cache...');
     await fetchAllMedia();
 
-    // Fetch all products and inventory data
+    // Fetch all products
     console.log('Fetching product data from Shopify...');
-    const [products, inventoryData] = await Promise.all([
-      fetchAllProducts(),
-      fetchInventoryLevels()
-    ]);
+    const products = await fetchAllProducts();
 
     // Transform data for LLM consumption with async processing
     console.log('Transforming product data for LLM consumption...');
-    const transformedData = await transformDataForLLM(products, inventoryData);
+    const transformedData = await transformDataForLLM(products);
     
     // Prepare response data
     const responseData: ProductsResponse = {
@@ -73,11 +91,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
       totalProducts: transformedData.length,
       timestamp: new Date().toISOString(),
       // Calculate estimated tokens for the entire response
-      estimatedTokens: await estimateTokens(transformedData)
+      estimatedTokens: await estimateTokens(transformedData),
+      fromCache: false
     };
     
     console.log(`Successfully processed ${transformedData.length} products`);
     console.log(`Estimated tokens: ${responseData.estimatedTokens}`);
+    
+    // Cache the result in Redis for future requests
+    if (useCache) {
+      try {
+        console.log('Caching product data in Redis...');
+        await productCache.set(cacheKey, responseData, 3600); // Cache for 1 hour
+        console.log('Product data cached successfully in Redis');
+      } catch (cacheError) {
+        console.warn('Failed to cache product data in Redis:', cacheError);
+      }
+    }
     
     // Return the data
     return json(responseData);
