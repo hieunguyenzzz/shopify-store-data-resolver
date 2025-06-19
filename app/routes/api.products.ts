@@ -102,7 +102,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     if (useCache) {
       try {
         console.log('Caching product data in Redis...');
-        await productCache.set(cacheKey, responseData, 3600); // Cache for 1 hour
+        await productCache.set(cacheKey, responseData, 86400); // Cache for 24 hours
         console.log('Product data cached successfully in Redis');
       } catch (cacheError) {
         console.warn('Failed to cache product data in Redis:', cacheError);
