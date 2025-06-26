@@ -48,7 +48,7 @@ export class RedisCache {
   private client: Redis;
   private defaultTTL: number;
 
-  constructor(ttlSeconds: number = 86400) { // 24 hours default
+  constructor(ttlSeconds: number = 31536000) { // 1 year default
     this.client = getRedisClient();
     this.defaultTTL = ttlSeconds;
   }
@@ -230,11 +230,11 @@ export class RedisCache {
   }
 }
 
-// Export singleton instance with default 24 hour TTL
-export const redisCache = new RedisCache(86400);
+// Export singleton instance with default 1 year TTL
+export const redisCache = new RedisCache(31536000);
 
 // Export specific cache instances for different data types
-export const productCache = new RedisCache(86400); // 24 hours for products
-export const mediaCache = new RedisCache(86400); // 24 hours for media
-export const collectionCache = new RedisCache(86400); // 24 hours for collections
-export const pageCache = new RedisCache(86400); // 24 hours for pages 
+export const productCache = new RedisCache(31536000); // 1 year for products
+export const mediaCache = new RedisCache(31536000); // 1 year for media
+export const collectionCache = new RedisCache(31536000); // 1 year for collections
+export const pageCache = new RedisCache(31536000); // 1 year for pages 
