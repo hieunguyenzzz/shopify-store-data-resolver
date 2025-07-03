@@ -455,7 +455,7 @@ export async function fetchAllProducts(): Promise<any[]> {
             name
             values
           }
-          metafields(first: 30) {
+          metafields(first: 35) {
             nodes {
               namespace
               key
